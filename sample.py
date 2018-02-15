@@ -97,7 +97,7 @@ def get_TT_cov(C_l, nside=8):
 def map_sample(C_l, m, show=False, var=1e-2):
     npix = len(m)
     N = np.eye(npix)*var
-    Ninv = np.linalg.inv(N)*var
+    Ninv = np.linalg.inv(N)
     #inds = (mask == 0)
     #Ninv[inds] = 0
     #Ninv[:,inds] = 0
@@ -106,12 +106,18 @@ def map_sample(C_l, m, show=False, var=1e-2):
     S = get_TT_cov(C_l)
     I = np.eye(npix)
     SN = S.dot(Ninv)
-    mu = S.dot(np.linalg.inv(S+N).dot(m))
-    #mu = SN.dot(np.linalg.inv(I+SN).dot(m))
+    #mu = S.dot(np.linalg.inv(S+N).dot(m))
+    # Weiner filter is 
+    # mu = (S^-1+N^-1)^-1 N^-1 m
+    #    = [S - SN^-1(I+SN^-1)^-1S]N^-1 m
+    #mu = SN.dot(m) - SN.dot(np.linalg.inv(I+SN).dot(SN.dot(m)))
+    # the paper I'm working with gives
+    # mu =S(S+N)^-1 m=S[(I+SN^-1)N]^-1 m = SN^-1(I+SN^-1) m
+    mu = SN.dot(np.linalg.inv(I+SN).dot(m))
 
 
-    Sigma  = np.linalg.inv(np.linalg.inv(S) + Ninv)
-    #Sigma = S - SN.dot(np.linalg.inv(I + SN).dot(S))
+    #Sigma  = np.linalg.inv(np.linalg.inv(S) + Ninv)
+    Sigma = S - SN.dot(np.linalg.inv(I + SN).dot(S))
     # Maybe the problem is when I'm sampling from the multivariate normal...
     # Graeme did a scipy linalg decomposition of the covariance, 
     #returned mean + L.dot(x) where x is a random standard Gaussian.
@@ -156,7 +162,7 @@ def gibbs_sample(m, iters=20):
         Cl = cl_sample(s)
         maps.append(s)
         Cls.append(Cl)
-        print(i, s.std(), Cl.mean())
+        print(i, s.std(), Cl.min())
     return maps, Cls
 
 from scipy.special import gamma
