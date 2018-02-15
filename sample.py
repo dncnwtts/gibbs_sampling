@@ -98,10 +98,10 @@ def map_sample(C_l, m, show=False, var=1e-2):
     npix = len(m)
     N = np.eye(npix)*var
     Ninv = np.linalg.inv(N)
-    #inds = (mask == 0)
-    #Ninv[inds] = 0
-    #Ninv[:,inds] = 0
-    #N[inds, inds] = 1e3
+    inds = (mask == 0)
+    Ninv[inds] = 0
+    Ninv[:,inds] = 0
+    N[inds, inds] = 1e3
 
     S = get_TT_cov(C_l)
     I = np.eye(npix)
@@ -141,7 +141,7 @@ def map_sample(C_l, m, show=False, var=1e-2):
 def cl_sample(s):
     sigma_l = hp.anafast(s)
     ell = np.arange(len(sigma_l))
-    cl_draw = []
+    cl_draw = [0,0]
     for l in ell[2:]:
         l = int(l)
         alpha = (2*ell[l]-1)/2
@@ -162,7 +162,7 @@ def gibbs_sample(m, iters=20):
         Cl = cl_sample(s)
         maps.append(s)
         Cls.append(Cl)
-        print(i, s.std(), Cl.min())
+        print(i, s.std(), Cl[2:].min())
     return maps, Cls
 
 from scipy.special import gamma
@@ -228,6 +228,10 @@ def stupid_test2():
 
 if __name__ == '__main__':
     var = 1e-2
+    mask = hp.read_map('class_mask.fits')
+    mask = hp.ud_grade(mask, 8)
+    mask = np.where(mask < 0.5, 0, 1)
+    inds = (mask == 0)
     #test1()
     #test2()
 
@@ -235,27 +239,29 @@ if __name__ == '__main__':
     C_l = np.zeros_like(ell)
     C_l[2:] = 1./ell[2:]**2
 
-    s_true = hp.synfast(C_l, 8)
+    s_true = hp.synfast(C_l, 8, fwhm=2.5*hp.nside2resol(8))
     n = np.random.randn(hp.nside2npix(8))*var**0.5
     m = s_true + n
+    m[inds] = 0
 
     #map_sample(C_l, m, show=True)
 
-    maps, Cls = gibbs_sample(m, iters=20)
+    maps, Cls = gibbs_sample(m, iters=100)
+
     plt.figure()
     plt.plot(ell[2:], C_l[2:], label='True')
     plt.plot(ell[2:], hp.anafast(s_true)[2:], '.', label=r'$\hat C_{\ell,\mathrm{true}}$')
     for i in range(len(Cls)):
-        plt.plot(ell[2:], Cls[i], 'k.', alpha=0.5)
+        plt.plot(ell[2:], Cls[i][2:], 'k.', alpha=0.5)
     plt.yscale('log')
     plt.legend(loc='best')
     plt.savefig('power_spectra.png')
 
 
-    #for i in range(len(maps)):
-    #    hp.mollview(maps[i], min=-2, max=2, title='', cbar=False)
-    #    plt.savefig('map_{0}.png'.format(str(i).zfill(3)))
-    #    plt.close()
+    for i in range(len(maps)):
+        hp.mollview(maps[i], min=-2, max=2, title='', cbar=False)
+        plt.savefig('map_{0}.png'.format(str(i).zfill(3)))
+        plt.close()
    
 
     #C = get_TT_cov(C_l)
