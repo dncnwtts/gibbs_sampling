@@ -16,8 +16,7 @@ def get_matrix_emode_qu(ellmax, nside):
         re_alm[r] = 1.0
         cx_alm = rlm.real2complex(re_alm)
         tuple_ = (cx_alm * 0, cx_alm, cx_alm * 0)    # Zero the T,B modes
-        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False,
-                pixwin=True)
+        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False)
         matrix[r,0*npix:npix]   = harmonic_tqu[0] # I Stokes parameter
         matrix[r,1*npix:2*npix] = harmonic_tqu[1] # Q Stokes parameter
         matrix[r,2*npix:3*npix] = harmonic_tqu[2] # U Stokes parameter
@@ -32,7 +31,7 @@ def get_matrix_bmode_qu(ellmax, nside):
         re_alm[r] = 1.0
         cx_alm = rlm.real2complex(re_alm)
         tuple_ = (cx_alm * 0, cx_alm * 0, cx_alm)    # Zero the E modes
-        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False, pixwin=True)
+        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False)
         matrix[r,0*npix:npix]   = harmonic_tqu[0] # I Stokes parameter
         matrix[r,1*npix:2*npix] = harmonic_tqu[1] # Q Stokes parameter
         matrix[r,2*npix:3*npix] = harmonic_tqu[2] # U Stokes parameter
@@ -48,7 +47,7 @@ def get_matrix_tmode_ii(ellmax, nside):
         re_alm[r] = 1.0
         cx_alm = rlm.real2complex(re_alm)
         tuple_ = (cx_alm, cx_alm * 0, cx_alm * 0)    # Zero the E/B modes
-        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False, pixwin=True)
+        harmonic_tqu = hp.sphtfunc.alm2map(tuple_, nside, verbose=False)
         matrix[r,0*npix:npix]   = harmonic_tqu[0] # I Stokes parameter
         matrix[r,1*npix:2*npix] = harmonic_tqu[1] # Q Stokes parameter
         matrix[r,2*npix:3*npix] = harmonic_tqu[2] # U Stokes parameter
@@ -73,22 +72,23 @@ YBQ, YBU = np.split(YB[:,npix:],2, axis=1)
 def mat_from_cl(Cl_array):
     TT, EE, BB, TE, TB, EB = Cl_array
     TT_alm = np.diag(expand_cl2alm(TT))
-    TE_alm = np.diag(expand_cl2alm(TE))
     EE_alm = np.diag(expand_cl2alm(EE))
     BB_alm = np.diag(expand_cl2alm(BB))
+    TE_alm = np.diag(expand_cl2alm(TE))
     TB_alm = np.diag(expand_cl2alm(TB))
     EB_alm = np.diag(expand_cl2alm(EB))
 
     II = YTI.T.dot(TT_alm.dot(YTI)) ## TT only
     IQ = YTI.T.dot(TE_alm.dot(YEQ) + TB_alm.dot(YBQ)) # TE, TB
     IU = YTI.T.dot(TE_alm.dot(YEU) + TB_alm.dot(YBU)) # TE, TB
-    QI = IQ.T
-    UI = IU.T
+    QI = YEQ.T.dot(TE_alm.dot(YTI)) + YBQ.T.dot(TB_alm.dot(YTI))
+    UI = YEU.T.dot(TE_alm.dot(YTI)) + YBU.T.dot(TB_alm.dot(YTI))
     QQ = YEQ.T.dot(EE_alm.dot(YEQ)) + YBQ.T.dot(EB_alm.dot(YEQ)) +\
          YEQ.T.dot(EB_alm.dot(YBQ)) + YBQ.T.dot(BB_alm.dot(YBQ))
     QU = YEQ.T.dot(EE_alm.dot(YEU)) + YBQ.T.dot(EB_alm.dot(YEU)) +\
          YEQ.T.dot(EB_alm.dot(YBU)) + YBQ.T.dot(BB_alm.dot(YBU))
-    UQ = QU
+    UQ = YEU.T.dot(EE_alm.dot(YEQ)) + YBU.T.dot(EB_alm.dot(YEQ)) +\
+         YEU.T.dot(EB_alm.dot(YBQ)) + YBU.T.dot(BB_alm.dot(YBQ))
     UU = YEU.T.dot(EE_alm.dot(YEU)) + YBU.T.dot(EB_alm.dot(YEU)) +\
          YEU.T.dot(EB_alm.dot(YBU)) + YBU.T.dot(BB_alm.dot(YBU))
     
@@ -97,44 +97,47 @@ def mat_from_cl(Cl_array):
                     np.hstack((UI,UQ,UU))))
     return M
 
-ell = np.arange(ellmax+1.)
-C_l = np.zeros_like(ell)
-C_l[2:] = 1./ell[2:]**2
-
-
-Cl_array = np.array([C_l, 0*C_l, 0*C_l, 0*C_l, 0*C_l, 0*C_l])
-
-M = mat_from_cl(Cl_array)
-plt.imshow(M, vmin=-0.1, vmax=0.1, cmap='seismic')
-plt.colorbar()
-plt.show()
-
-# Test that things are sort of right
-
-Cl_array = np.array([C_l, 0.1*C_l, 0.001*C_l, 0.3*C_l, 0*C_l, 0*C_l])
-M = mat_from_cl(Cl_array)
-plt.imshow(M, vmin=-0.1, vmax=0.1, cmap='seismic')
-plt.colorbar()
-plt.show()
-
-mu = np.zeros(3*npix)
-map_ = np.random.multivariate_normal(mu, M)
-plt.figure()
-I,Q,U = np.split(map_, 3)
-m = np.array([I,Q,U])
-hp.mollview(I, sub=131)
-hp.mollview(Q, sub=132)
-hp.mollview(U, sub=133)
-plt.show()
-
-plt.figure()
-
-clhat = hp.anafast(m)
-
-for i, cl in enumerate(clhat):
-    plt.plot(ell[2:], cl[2:], '.', color='C{0}'.format(i))
-for i, cl in enumerate(Cl_array):
-    plt.plot(ell[2:], cl[2:]*hp.pixwin(8)[2:24]**2, color='C{0}'.format(i))
-plt.ylim([1e-7, 1])
-plt.yscale('log')
-
+if __name__ == '__main__':
+    ell = np.arange(ellmax+1.)
+    C_l = np.zeros_like(ell)
+    C_l[2:] = 1./ell[2:]**2
+    
+    
+    Cl_array = np.array([C_l, 0*C_l, 0*C_l, 0*C_l, 0*C_l, 0*C_l])
+    
+    M = mat_from_cl(Cl_array)
+    plt.imshow(M, vmin=-0.1, vmax=0.1, cmap='seismic')
+    plt.colorbar()
+    plt.show()
+    
+    # Test that things are sort of right
+    plt.figure()
+    Cl_array = np.array([C_l, 0.1*C_l, 0.001*C_l, 0.3*C_l, 0*C_l, 0*C_l])
+    M = mat_from_cl(Cl_array)
+    plt.imshow(M, vmin=-0.1, vmax=0.1, cmap='seismic')
+    plt.colorbar()
+    plt.show()
+    
+    mu = np.zeros(3*npix)
+    map_ = np.random.multivariate_normal(mu, M)
+    plt.figure()
+    I,Q,U = np.split(map_, 3)
+    m = np.array([I,Q,U])
+    hp.mollview(I, sub=131, min=-2, max=2)
+    hp.mollview(Q, sub=132, min=-0.5, max=0.5)
+    hp.mollview(U, sub=133, min=-0.5, max=0.5)
+    plt.show()
+    
+    plt.figure()
+    
+    clhat = hp.anafast(m)
+    
+    for i, cl in enumerate(clhat):
+        plt.plot(ell[2:], cl[2:], '.', color='C{0}'.format(i))
+    labels = ['TT','EE','BB','TE','TB','EB']
+    for i, cl in enumerate(Cl_array):
+        plt.plot(ell[2:], cl[2:], color='C{0}'.format(i), label=labels[i])
+    plt.legend(loc='best')
+    plt.ylim([1e-7, 1])
+    plt.yscale('log')
+    plt.show()
